@@ -72,22 +72,34 @@ Process
         # Create ordered properties to be used for the custom object. 
         $Output = [Ordered]@{
 					'ComputerName' = $Computer
+                    'ResolvedIP' = $null
 					'Scantime' = $null
 					'StartTime' = $null
 					'Uptime' = $null
 					'Status' = $null
 				    }
-        # Ping
+        # Ping (or Test-Connection?)
         [System.Management.ManagementObject] $p = ping($ComputerName)
 
         if ($p.StatusCode -eq 0){
             Write-Debug("Ping Worked")
-
-            [System.Management.ManagementObject] $OS = Get-WmiObject -Class Win32_OperatingSystem -ComputerName $ComputerName  
-            [string] $OSRunning = $OS.caption + " " + $OS.OSArchitecture + " SP " + $OS.ServicePackMajorVersion 
-            $Output.ScanTime = Get-Date
-            $Output.StartTime = $OS.LastBootUpTime
-            $Output.uptime = Get-UpTime($OS.LastBootUpTime)
+            $Output.ResolvedIP = $p.IPV4Address
+            # So test a connection
+            try {
+                [System.Management.ManagementObject] $OS = Get-WmiObject -Class Win32_OperatingSystem -ComputerName $ComputerName  
+                [string] $OSRunning = $OS.caption + " " + $OS.OSArchitecture + " SP " + $OS.ServicePackMajorVersion 
+                $Output.ScanTime = Get-Date
+                $Output.StartTime = $OS.LastBootUpTime
+                $Output.uptime = Get-UpTime($OS.LastBootUpTime)
+                $Output.status= "Successful Scan"
+                }
+            Catch
+                {
+                # Declares non-terminating error if unable to determine the uptime for the specified computer and sets the computer status to 'Error'.
+                Write-Error ("Unable to determine uptime for the computer '$Computer', with the error exception: " + $_.Exception.Message + ".")
+                $Output.Status = "Error $_.Exception.Message"
+                } # Catch  
+            
         } else {
             if ($p.StatusCode -eq  $null ){
                 #ToDo: Check if there is a more elligent check
@@ -97,7 +109,7 @@ Process
                 [string] $PingStatus = Get-PingStatusCode($p.StatusCode)
                 $Output.Status = "Ping - Code: $($p.StatusCode).  Desc. $PingStatus "
             }
-        }
+        } # EndIf Ping
 
         [PsCustomObject]$Output
     } # ForEach
@@ -113,4 +125,5 @@ End
 } # Function
 
 
-#Testing Get-ComputerScan -ComputerName "doesnotexist"
+#Move to a test framework 
+#Get-ComputerScan -ComputerName "192.168.1.66"
